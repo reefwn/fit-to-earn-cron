@@ -10,10 +10,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 
 @Entity({ name: 'activities' })
-export class Activity {
+export class ActivityEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -154,4 +155,7 @@ export class Activity {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @DeleteDateColumn()
+  deleted_at: Date;
 }

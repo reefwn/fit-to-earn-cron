@@ -1,0 +1,8 @@
+export enum ActivityEnrollmentStatus {
+  REGISTER = 'REGISTER',
+  CHECKIN = 'CHECKIN',
+  CHECKOUT = 'CHECKOUT',
+  COMPLETE = 'COMPLETE',
+  DISTRIBUTED = 'DISTRIBUTED',
+  CANCEL = 'CANCEL',
+}
