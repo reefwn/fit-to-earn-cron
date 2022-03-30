@@ -2,11 +2,13 @@ import { MemberGender } from 'src/member/member.enum';
 import {
   Column,
   Entity,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
 
 @Entity({ name: 'members' })
 export class MemberEntity {
@@ -75,4 +77,7 @@ export class MemberEntity {
 
   @DeleteDateColumn()
   deleted_at: Date;
+
+  @OneToMany(() => ActivityEnrollmentEntity, (enrollment) => enrollment.member)
+  enrollments: MemberEntity;
 }

@@ -1,12 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { ActivityService } from './activity/activity.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly activityService: ActivityService) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  // TODO: for testing
+  @Get('test')
+  async test() {
+    return this.activityService.distributionCoin();
   }
 }

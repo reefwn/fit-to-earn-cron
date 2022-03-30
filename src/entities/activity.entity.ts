@@ -7,11 +7,13 @@ import {
 import {
   Entity,
   Column,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
   DeleteDateColumn,
 } from 'typeorm';
+import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
 
 @Entity({ name: 'activities' })
 export class ActivityEntity {
@@ -25,7 +27,7 @@ export class ActivityEntity {
   detail: string;
 
   @Column()
-  participant_limit: number;
+  paticipant_limit: number;
 
   @Column()
   latitude: string;
@@ -158,4 +160,10 @@ export class ActivityEntity {
 
   @DeleteDateColumn()
   deleted_at: Date;
+
+  @OneToMany(
+    () => ActivityEnrollmentEntity,
+    (enrollment) => enrollment.activity,
+  )
+  enrollments: ActivityEnrollmentEntity[];
 }

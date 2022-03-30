@@ -2,11 +2,15 @@ import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrol
 import {
   Column,
   Entity,
+  ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   DeleteDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { ActivityEntity } from './activity.entity';
+import { MemberEntity } from './member.entity';
 
 @Entity({ name: 'activity_enrollments' })
 export class ActivityEnrollmentEntity {
@@ -78,4 +82,12 @@ export class ActivityEnrollmentEntity {
 
   @DeleteDateColumn()
   deleted_at: Date;
+
+  @ManyToOne(() => ActivityEntity, (activity) => activity.enrollments)
+  @JoinColumn({ name: 'activity_id' })
+  activity: ActivityEntity;
+
+  @ManyToOne(() => MemberEntity, (member) => member.enrollments)
+  @JoinColumn({ name: 'member_id' })
+  member: MemberEntity;
 }

@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ActivityService } from './activity/activity.service';
+import { ActivityEntity } from './entities/activity.entity';
+import { ActivityEnrollmentEntity } from './entities/activity-enrollment.entity';
+import { MemberEntity } from './entities/member.entity';
 
 @Module({
   imports: [
@@ -12,10 +16,17 @@ import { AppService } from './app.service';
       username: process.env.DATABASE_USER || 'dbuser',
       password: process.env.DATABASE_PASSWORD || 'dbpassword',
       database: process.env.DATABASE_NAME || 'app',
-      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+      // TODO: for debugging
+      logging: true,
+      entities: [MemberEntity, ActivityEntity, ActivityEnrollmentEntity],
     }),
+    TypeOrmModule.forFeature([
+      MemberEntity,
+      ActivityEntity,
+      ActivityEnrollmentEntity,
+    ]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ActivityService],
 })
 export class AppModule {}
