@@ -26,7 +26,7 @@ export class ActivityService {
     ];
 
     const activities = await this.activityRepo.find({
-      relations: { enrollments: { member: true } },
+      relations: { reciever_token: true, enrollments: { member: true } },
       where: [
         {
           ...activityBaseQuery,
@@ -44,9 +44,47 @@ export class ActivityService {
     });
 
     // TODO : loop through enrollment and calculate coin
-    // for (let i=0; i<activities.length; i++) {
+    for (let i = 0; i < activities.length; i++) {
+      for (let j = 0; j < activities[i].enrollments.length; j++) {
+        const memberCsrTime =
+          activities[i].enrollments[j].cumulative_csrtime || 0;
 
-    // }
+        if (+memberCsrTime >= +activities[i].minimum_csrtime) {
+          const totalCoinDistributed = activities[i].amount_giveaways;
+          let timeCSRUser =
+            memberCsrTime >= activities[i].cumulative_minute
+              ? memberCsrTime
+              : activities[i].cumulative_minute;
+
+          if (timeCSRUser === 0) {
+            timeCSRUser = 1;
+          }
+          if (memberCsrTime === 0 && activities[i].minimum_csrtime === 0) {
+            timeCSRUser = activities[i].cumulative_minute;
+          }
+
+          let userCsrtime =
+            ((timeCSRUser / activities[i].cumulative_minute) *
+              (100 * totalCoinDistributed)) /
+            100;
+          if (+userCsrtime === 0) {
+            userCsrtime =
+              activities[i].minimum_csrtime === 0
+                ? activities[i].amount_giveaways
+                : 1;
+          }
+
+          const dataTransfer = {
+            address: process.env.walletAddress,
+            receiver: activities[i].enrollments[j].member.wallet_address,
+            coin: activities[i].receiver_token_type,
+            amount: userCsrtime,
+          };
+
+          // TODO: create document running number service
+        }
+      }
+    }
 
     return { activities };
   }

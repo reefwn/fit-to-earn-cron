@@ -6,6 +6,7 @@ import { ActivityService } from './activity/activity.service';
 import { ActivityEntity } from './entities/activity.entity';
 import { ActivityEnrollmentEntity } from './entities/activity-enrollment.entity';
 import { MemberEntity } from './entities/member.entity';
+import { CoinEntity } from './entities/coin.entity';
 
 @Module({
   imports: [
@@ -18,12 +19,18 @@ import { MemberEntity } from './entities/member.entity';
       database: process.env.DATABASE_NAME || 'app',
       // TODO: for debugging
       logging: true,
-      entities: [MemberEntity, ActivityEntity, ActivityEnrollmentEntity],
+      entities: [
+        MemberEntity,
+        ActivityEntity,
+        ActivityEnrollmentEntity,
+        CoinEntity,
+      ],
     }),
     TypeOrmModule.forFeature([
       MemberEntity,
       ActivityEntity,
       ActivityEnrollmentEntity,
+      CoinEntity,
     ]),
   ],
   controllers: [AppController],

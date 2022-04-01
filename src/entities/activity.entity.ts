@@ -7,13 +7,16 @@ import {
 import {
   Entity,
   Column,
+  ManyToOne,
   OneToMany,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
+import { CoinEntity } from './coin.entity';
 
 @Entity({ name: 'activities' })
 export class ActivityEntity {
@@ -166,4 +169,8 @@ export class ActivityEntity {
     (enrollment) => enrollment.activity,
   )
   enrollments: ActivityEnrollmentEntity[];
+
+  @ManyToOne(() => CoinEntity, (coin) => coin.reciever_token_activities)
+  @JoinColumn({ name: 'receiver_token_type', referencedColumnName: 'name' })
+  reciever_token: CoinEntity;
 }
