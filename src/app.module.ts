@@ -7,6 +7,8 @@ import { ActivityEntity } from './entities/activity.entity';
 import { ActivityEnrollmentEntity } from './entities/activity-enrollment.entity';
 import { MemberEntity } from './entities/member.entity';
 import { CoinEntity } from './entities/coin.entity';
+import { DocumentNumberEntity } from './entities/document-number.entity';
+import { DocumentNumberService } from './document-number/document-number.service';
 
 @Module({
   imports: [
@@ -24,6 +26,7 @@ import { CoinEntity } from './entities/coin.entity';
         ActivityEntity,
         ActivityEnrollmentEntity,
         CoinEntity,
+        DocumentNumberEntity,
       ],
     }),
     TypeOrmModule.forFeature([
@@ -31,9 +34,10 @@ import { CoinEntity } from './entities/coin.entity';
       ActivityEntity,
       ActivityEnrollmentEntity,
       CoinEntity,
+      DocumentNumberEntity,
     ]),
   ],
   controllers: [AppController],
-  providers: [AppService, ActivityService],
+  providers: [AppService, ActivityService, DocumentNumberService],
 })
 export class AppModule {}

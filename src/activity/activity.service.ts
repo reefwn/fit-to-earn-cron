@@ -1,4 +1,5 @@
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
+import { DocumentNumberService } from 'src/document-number/document-number.service';
 import { ActivityEntity } from 'src/entities/activity.entity';
 import { Repository } from 'typeorm/repository/Repository';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,7 @@ export class ActivityService {
   constructor(
     @InjectRepository(ActivityEntity)
     private readonly activityRepo: Repository<ActivityEntity>,
+    private readonly documentNumberService: DocumentNumberService,
   ) {}
 
   async distributionCoin() {
@@ -81,7 +83,9 @@ export class ActivityService {
             amount: userCsrtime,
           };
 
-          // TODO: create document running number service
+          const transactionNo = await this.documentNumberService.getRunNo();
+
+          // TODO: create transaction service
         }
       }
     }
