@@ -1,16 +1,24 @@
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
 import { DocumentNumberService } from 'src/document-number/document-number.service';
+import { TransactionService } from 'src/transaction/transaction.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { LessThan } from 'typeorm';
 import {
   ActivityStatus,
   ActivityRequireCheckinCheckout,
 } from 'src/activity/activity.enum';
+import { Injectable } from '@nestjs/common';
+import {
+  TransactionStatus,
+  TransactionType,
+} from 'src/transaction/transaction.enum';
 
+@Injectable()
 export class TaskService {
   constructor(
-    private readonly activityService: ActivityService,
-    private readonly documentNumberService: DocumentNumberService,
+    private activityService: ActivityService,
+    private documentNumberService: DocumentNumberService,
+    private transactionService: TransactionService,
   ) {}
 
   async distributionCoin() {
@@ -73,6 +81,42 @@ export class TaskService {
                 : 1;
           }
 
+          const transactionBaseEntity = {
+            sender_name: null,
+            receiver_name: `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`,
+            wallet_sender: process.env.WALLET_ADDRESS,
+            wallet_receiver: `${activities[i].enrollments[j].member.wallet_address}`,
+            status: TransactionStatus.PENDING,
+            amount: userCsrtime,
+            amount_receive: userCsrtime,
+            coin_id: activities[i].reciever_token.id,
+            coin_receive_id: activities[i].reciever_token.id,
+            fee: 1,
+            note: `คุณได้รับเหรียญ ${activities[i].reciever_token.full_name} จำนวน ${userCsrtime} เหรียญ จากกิจกรรม ${activities[i].title}`,
+          };
+
+          let transactionNo = await this.documentNumberService.getRunNo();
+          const distributeSendTransactionEntity =
+            this.transactionService.create(transactionBaseEntity);
+          distributeSendTransactionEntity.type = TransactionType.SEND;
+          distributeSendTransactionEntity.transaction_no = `CTF${transactionNo}`;
+          distributeSendTransactionEntity.pair_transaction = `${transactionNo}`;
+          const distributeSendTransaction = await this.transactionService.save(
+            distributeSendTransactionEntity,
+          );
+
+          transactionNo = await this.documentNumberService.getRunNo();
+          const distributeReceiveTransactionEntity =
+            this.transactionService.create(transactionBaseEntity);
+          distributeReceiveTransactionEntity.type = TransactionType.RECEIVE;
+          distributeReceiveTransactionEntity.transaction_no = `CTF${transactionNo}`;
+          distributeReceiveTransactionEntity.pair_transaction =
+            distributeSendTransaction.pair_transaction;
+          const distributeReceiveTransaction =
+            await this.transactionService.save(
+              distributeReceiveTransactionEntity,
+            );
+
           const dataTransfer = {
             address: process.env.walletAddress,
             receiver: activities[i].enrollments[j].member.wallet_address,
@@ -80,9 +124,7 @@ export class TaskService {
             amount: userCsrtime,
           };
 
-          const transactionNo = await this.documentNumberService.getRunNo();
-
-          // TODO: create transaction service
+          // TODO: create blockchain service
         }
       }
     }

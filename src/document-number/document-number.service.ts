@@ -1,7 +1,9 @@
-import { InjectRepository } from '@nestjs/typeorm';
 import { DocumentNumberEntity } from 'src/entities/document-number.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 
+@Injectable()
 export class DocumentNumberService {
   constructor(
     @InjectRepository(DocumentNumberEntity)

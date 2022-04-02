@@ -12,8 +12,8 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  PrimaryGeneratedColumn,
   DeleteDateColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
 import { CoinEntity } from './coin.entity';
@@ -25,6 +25,9 @@ export class ActivityEntity {
 
   @Column()
   code: string;
+
+  @Column()
+  title: string;
 
   @Column()
   detail: string;

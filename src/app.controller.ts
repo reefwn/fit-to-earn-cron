@@ -1,13 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
-import { ActivityService } from './activity/activity.service';
+import { TaskService } from './task/task.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly activityService: ActivityService) {}
+  constructor(private taskService: TaskService) {}
 
   // TODO: for testing
   @Get('test')
   async test() {
-    return this.activityService.distributionCoin();
+    return this.taskService.distributionCoin();
   }
 }
