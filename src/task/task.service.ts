@@ -1,6 +1,7 @@
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
 import { DocumentNumberService } from 'src/document-number/document-number.service';
 import { TransactionService } from 'src/transaction/transaction.service';
+import { BlockChainService } from 'src/blockchain/blockchain.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { LessThan } from 'typeorm';
 import {
@@ -12,6 +13,7 @@ import {
   TransactionStatus,
   TransactionType,
 } from 'src/transaction/transaction.enum';
+import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 
 @Injectable()
 export class TaskService {
@@ -19,11 +21,12 @@ export class TaskService {
     private activityService: ActivityService,
     private documentNumberService: DocumentNumberService,
     private transactionService: TransactionService,
+    private blockChainService: BlockChainService,
   ) {}
 
   async distributionCoin() {
     const date = new Date();
-    // const timestamp = +date + 14 * 60 * 60 * 1000;
+    const timestamp = +date + 14 * 60 * 60 * 1000;
 
     const activityBaseQuery = { status: ActivityStatus.APPROVE };
     const enrollmentBaseQuery = { member: true };
@@ -117,7 +120,7 @@ export class TaskService {
               distributeReceiveTransactionEntity,
             );
 
-          const dataTransfer = {
+          const dataTransfer: BlockChainDataDto = {
             address: process.env.walletAddress,
             receiver: activities[i].enrollments[j].member.wallet_address,
             coin: activities[i].receiver_token_type,
@@ -125,6 +128,26 @@ export class TaskService {
           };
 
           // TODO: create blockchain service
+          const blockResponse =
+            await this.blockChainService.tranferCoinFromAdmin(dataTransfer);
+
+          if (blockResponse.status !== 200) {
+            distributeSendTransaction.status = TransactionStatus.FAIL;
+            await this.transactionService.save(distributeSendTransaction);
+
+            distributeReceiveTransaction.status = TransactionStatus.FAIL;
+            await this.transactionService.save(distributeReceiveTransaction);
+          } else {
+            distributeSendTransaction.status = TransactionStatus.SUCCESS;
+            distributeSendTransaction.tx_id = blockResponse.hash;
+            await this.transactionService.save(distributeSendTransaction);
+
+            distributeReceiveTransaction.status = TransactionStatus.SUCCESS;
+            distributeReceiveTransaction.tx_id = blockResponse.hash;
+            await this.transactionService.save(distributeReceiveTransaction);
+
+            // TODO: create coin history service
+          }
         }
       }
     }
