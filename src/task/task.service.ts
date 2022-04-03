@@ -1,7 +1,10 @@
+import { ActivityEnrollmentService } from 'src/activity-enrollment/activity-enrollment.service';
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
 import { DocumentNumberService } from 'src/document-number/document-number.service';
+import { CoinHistoryService } from 'src/coin-history/coin-history.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
+import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
 import { LessThan } from 'typeorm';
 import {
@@ -13,7 +16,6 @@ import {
   TransactionStatus,
   TransactionType,
 } from 'src/transaction/transaction.enum';
-import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 
 @Injectable()
 export class TaskService {
@@ -22,6 +24,8 @@ export class TaskService {
     private documentNumberService: DocumentNumberService,
     private transactionService: TransactionService,
     private blockChainService: BlockChainService,
+    private coinHistoryService: CoinHistoryService,
+    private activityEnrollmentService: ActivityEnrollmentService,
   ) {}
 
   async distributionCoin() {
@@ -147,6 +151,35 @@ export class TaskService {
             await this.transactionService.save(distributeReceiveTransaction);
 
             // TODO: create coin history service
+            let expireCoinHistory = null;
+            if (activities[i].reciever_token.age !== 0) {
+              expireCoinHistory =
+                timestamp +
+                activities[i].reciever_token.age * 24 * 60 * 60 * 1000;
+            }
+
+            const coinHistoryEntity = this.coinHistoryService.create({
+              wallet_address:
+                activities[i].enrollments[j].member.wallet_address,
+              coin_id: activities[i].reciever_token.id,
+              receive_date: new Date(timestamp),
+              expired_date: expireCoinHistory,
+              member_id: activities[i].enrollments[j].member.id,
+              receive_amount: userCsrtime,
+            });
+            await this.coinHistoryService.save(coinHistoryEntity);
+
+            await this.activityEnrollmentService.update(
+              {
+                id: activities[i].enrollments[j].id,
+              },
+              {
+                status: ActivityEnrollmentStatus.DISTRIBUTED,
+                receive_amount: userCsrtime,
+              },
+            );
+
+            // TODO: create notification service
           }
         }
       }
