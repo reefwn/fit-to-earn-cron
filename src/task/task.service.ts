@@ -1,9 +1,12 @@
 import { ActivityEnrollmentService } from 'src/activity-enrollment/activity-enrollment.service';
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
 import { DocumentNumberService } from 'src/document-number/document-number.service';
+import { MessagingPayload } from 'firebase-admin/lib/messaging/messaging-api';
+import { NotificationService } from 'src/notification/notification.service';
 import { CoinHistoryService } from 'src/coin-history/coin-history.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
+import { NotificationData } from 'src/notification/notification.dto';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
 import { LessThan } from 'typeorm';
@@ -16,6 +19,12 @@ import {
   TransactionStatus,
   TransactionType,
 } from 'src/transaction/transaction.enum';
+import { UserAppTokenService } from 'src/user-app-token/user-app-token.service';
+import {
+  NotificationBodyLocKey,
+  NotificationType,
+} from 'src/notification/notification.enum';
+import { TransactionEntity } from 'src/entities/transaction.entity';
 
 @Injectable()
 export class TaskService {
@@ -26,6 +35,8 @@ export class TaskService {
     private blockChainService: BlockChainService,
     private coinHistoryService: CoinHistoryService,
     private activityEnrollmentService: ActivityEnrollmentService,
+    private userAppTokenService: UserAppTokenService,
+    private notificationService: NotificationService,
   ) {}
 
   async distributionCoin() {
@@ -57,7 +68,6 @@ export class TaskService {
       ],
     });
 
-    // TODO : loop through enrollment and calculate coin
     for (let i = 0; i < activities.length; i++) {
       for (let j = 0; j < activities[i].enrollments.length; j++) {
         const memberCsrTime =
@@ -88,7 +98,7 @@ export class TaskService {
                 : 1;
           }
 
-          const transactionBaseEntity = {
+          const transactionBaseEntity: Partial<TransactionEntity> = {
             sender_name: null,
             receiver_name: `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`,
             wallet_sender: process.env.WALLET_ADDRESS,
@@ -131,7 +141,6 @@ export class TaskService {
             amount: userCsrtime,
           };
 
-          // TODO: create blockchain service
           const blockResponse =
             await this.blockChainService.tranferCoinFromAdmin(dataTransfer);
 
@@ -150,7 +159,6 @@ export class TaskService {
             distributeReceiveTransaction.tx_id = blockResponse.hash;
             await this.transactionService.save(distributeReceiveTransaction);
 
-            // TODO: create coin history service
             let expireCoinHistory = null;
             if (activities[i].reciever_token.age !== 0) {
               expireCoinHistory =
@@ -179,8 +187,49 @@ export class TaskService {
               },
             );
 
-            // TODO: create notification service
+            const memberTokenDevices = await this.userAppTokenService.find({
+              where: { member_id: activities[i].enrollments[j].member_id },
+              order: { created_at: 'DESC' },
+              take: 5,
+            });
+
+            let notificationMessage: MessagingPayload;
+            for (let k = 0; k < memberTokenDevices.length; k++) {
+              const notificationData: NotificationData = {
+                type: NotificationType.RECEIVE_COIN,
+                registrationToken: memberTokenDevices[k].token,
+                coinName: activities[i].reciever_token.full_name,
+                coinAmount: userCsrtime,
+                userSend: activities[i].title,
+              };
+
+              notificationMessage = await this.notificationService.notify(
+                notificationData,
+              );
+            }
+
+            const notificationEntity = this.notificationService.create({
+              title: notificationMessage.notification.title,
+              message: notificationMessage.notification.body,
+              member_id: activities[i].enrollments[j].member_id,
+              is_sent: 1,
+              is_readed: 0,
+              link_to: NotificationBodyLocKey.TRANSACTION_HISTORY,
+              type: NotificationBodyLocKey.TRANSACTION_HISTORY,
+              image_ref_id: activities[i].reciever_token.id,
+            });
+            await this.notificationService.save(notificationEntity);
           }
+        } else {
+          await this.activityEnrollmentService.update(
+            {
+              id: activities[i].enrollments[j].id,
+            },
+            {
+              status: ActivityEnrollmentStatus.DISTRIBUTED,
+              receive_amount: 0,
+            },
+          );
         }
       }
     }
