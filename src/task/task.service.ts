@@ -7,9 +7,11 @@ import { CoinHistoryService } from 'src/coin-history/coin-history.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
 import { NotificationData } from 'src/notification/notification.dto';
+import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
-import { LessThan } from 'typeorm';
+import { CoinService } from 'src/coin/coin.service';
+import { LessThan, MoreThan } from 'typeorm';
 import {
   ActivityStatus,
   ActivityRequireCheckinCheckout,
@@ -24,7 +26,6 @@ import {
   NotificationBodyLocKey,
   NotificationType,
 } from 'src/notification/notification.enum';
-import { TransactionEntity } from 'src/entities/transaction.entity';
 
 @Injectable()
 export class TaskService {
@@ -37,6 +38,7 @@ export class TaskService {
     private activityEnrollmentService: ActivityEnrollmentService,
     private userAppTokenService: UserAppTokenService,
     private notificationService: NotificationService,
+    private coinService: CoinService,
   ) {}
 
   async distributionCoin() {
@@ -46,8 +48,8 @@ export class TaskService {
     const activityBaseQuery = { status: ActivityStatus.APPROVE };
     const enrollmentBaseQuery = { member: true };
     const enrollmentQuery = [
-      { ...enrollmentBaseQuery, status: ActivityEnrollmentStatus.CHECKIN },
       { ...enrollmentBaseQuery, status: ActivityEnrollmentStatus.CHECKOUT },
+      { ...enrollmentBaseQuery, status: ActivityEnrollmentStatus.COMPLETE },
     ];
 
     const activities = await this.activityService.find({
@@ -233,7 +235,178 @@ export class TaskService {
         }
       }
     }
+  }
 
-    return { activities };
+  async crontabCancel() {
+    const date = new Date();
+    const timestamp = +date + 14 * 60 * 60 * 1000;
+
+    const activityBaseQuery = { status: ActivityStatus.APPROVE };
+    const enrollmentBaseQuery = { member: true };
+    const enrollmentQuery = [
+      { ...enrollmentBaseQuery, status: ActivityEnrollmentStatus.REGISTER },
+      { ...enrollmentBaseQuery, status: ActivityEnrollmentStatus.CHECKIN },
+    ];
+
+    const activities = await this.activityService.find({
+      relations: { reciever_token: true, enrollments: { member: true } },
+      where: [
+        {
+          ...activityBaseQuery,
+          req_checkin: ActivityRequireCheckinCheckout.NO,
+          end_date: LessThan(date),
+          enrollments: enrollmentQuery,
+        },
+        {
+          ...activityBaseQuery,
+          req_checkout: ActivityRequireCheckinCheckout.NO,
+          final_checkout: LessThan(date),
+          enrollments: enrollmentQuery,
+        },
+      ],
+    });
+
+    for (let i = 0; i < activities.length; i++) {
+      for (let j = 0; j < activities[i].enrollments.length; j++) {
+        let penaltyCase: number;
+        switch (activities[i].enrollments[j].status) {
+          case ActivityEnrollmentStatus.REGISTER:
+            penaltyCase = 2;
+            break;
+          case ActivityEnrollmentStatus.REGISTER:
+            penaltyCase = 3;
+            break;
+        }
+
+        const senderWallet = activities[i].enrollments[j].member.wallet_address;
+        const amountCanUse = [];
+        let index = 0;
+        let sumCoin = 0;
+
+        const coinHistoryMember = await this.coinHistoryService.find({
+          where: {
+            member_id: activities[i].enrollments[j].member_id,
+            expired_date: MoreThan(date),
+          },
+          order: { expired_date: 'ASC' },
+        });
+
+        let penaltyAmount = +activities[i][`penalty${penaltyCase}_amount`];
+        const penaltyCoinId = +activities[i][`penalty${penaltyCase}_coin_id`];
+
+        for (let k = 0; k < coinHistoryMember.length; k++) {
+          if (
+            Math.fround(coinHistoryMember[k].usege_amount) <
+            Math.fround(coinHistoryMember[k].receive_amount)
+          ) {
+            const useAmount = coinHistoryMember[k].usege_amount || 0;
+            amountCanUse[index] = {
+              id: coinHistoryMember[k].id,
+              old_amount: useAmount,
+              receive_amount: coinHistoryMember[k].receive_amount,
+              amount: coinHistoryMember[k].receive_amount - useAmount,
+            };
+
+            if (coinHistoryMember[k].coin_id === penaltyCoinId) {
+              sumCoin += amountCanUse[index].amount;
+            }
+            index++;
+          }
+        }
+
+        const amountTransfer = sumCoin - penaltyAmount;
+        if (sumCoin > 0) {
+          if (amountTransfer <= 0) {
+            penaltyAmount = sumCoin;
+          }
+
+          const transactionNo = await this.documentNumberService.getRunNo();
+          const sendTransactionEntity = this.transactionService.create({
+            sender_name: `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`,
+            receiver_name: null,
+            wallet_sender: senderWallet,
+            wallet_receiver: process.env.WALLET_ADDRESS,
+            transaction_no: `CTF${transactionNo}`,
+            type: TransactionType.SEND,
+            status: TransactionStatus.PENDING,
+            amount: penaltyAmount,
+            amount_receive: penaltyAmount,
+            coin_id: penaltyCoinId,
+            coin_receive_id: penaltyCoinId,
+            pair_transaction: `${transactionNo}`,
+            note: `Penalty from event ${activities[i].title}`,
+          });
+          const sendTransaction = await this.transactionService.save(
+            sendTransactionEntity,
+          );
+
+          const responseCoinData = await this.coinService.findOne({
+            where: {
+              id: penaltyCoinId,
+            },
+          });
+
+          if (!responseCoinData) {
+            continue;
+          }
+
+          const dataTransfer: BlockChainDataDto = {
+            address: senderWallet,
+            password: activities[i].enrollments[j].member.decrypt_key,
+            receiver: process.env.ADMIN_ADDRESS,
+            coin: responseCoinData.name,
+            amount: penaltyAmount,
+          };
+
+          if (penaltyAmount > 0 && sumCoin > 0) {
+            const blockResponse = await this.blockChainService.transferCoin(
+              dataTransfer,
+            );
+            if (blockResponse.status === 200) {
+              sendTransaction.status = TransactionStatus.SUCCESS;
+              sendTransaction.tx_id = blockResponse.hash;
+            } else {
+              sendTransaction.status = TransactionStatus.FAIL;
+            }
+            await this.transactionService.save(sendTransaction);
+
+            let amountRedeem = penaltyAmount;
+            for (let l = 0; l < amountCanUse.length; l++) {
+              if (amountRedeem > 0) {
+                let redeemCoin: number;
+                if (
+                  Math.fround(amountCanUse[l].amount) >
+                  Math.fround(amountRedeem)
+                ) {
+                  if (amountRedeem > amountCanUse[l].amount) {
+                    amountRedeem = amountCanUse[l].amount - amountRedeem;
+                  }
+                  redeemCoin = +amountCanUse[l].old_amount + +amountRedeem;
+                  await this.coinHistoryService.update(
+                    { id: amountCanUse[l].id },
+                    { usege_amount: redeemCoin },
+                  );
+                } else {
+                  redeemCoin =
+                    +amountCanUse[l].old_amount + +amountCanUse[l].amount;
+                  await this.coinHistoryService.update(
+                    { id: amountCanUse[l].id },
+                    { usege_amount: redeemCoin },
+                  );
+                  amountRedeem -= amountCanUse[l].amount;
+                }
+              }
+            }
+          }
+        }
+
+        await this.activityEnrollmentService.update(
+          {
+            id: activities[i].enrollments[j].id,
+          },
+          { status: ActivityEnrollmentStatus.CANCEL },
+        );
+      }
+    }
   }
 }

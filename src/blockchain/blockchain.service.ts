@@ -9,12 +9,16 @@ export class BlockChainService {
 
   async tranferCoinFromAdmin(data: BlockChainDataDto) {
     const observable = this.httpService
-      .post(`${process.env.BATCH_TRANSFER}/transfer`, {
-        address: data.address,
-        receiver: data.receiver,
-        coin: data.coin,
-        amount: data.amount,
-      })
+      .post(`${process.env.BATCH_TRANSFER}/transfer`, data)
+      .pipe(map((res) => res.data));
+    const response = await lastValueFrom(observable);
+
+    return response;
+  }
+
+  async transferCoin(data: BlockChainDataDto) {
+    const observable = this.httpService
+      .post(`${process.env.BLOCKCHAIN_IP}/transfer`, data)
       .pipe(map((res) => res.data));
     const response = await lastValueFrom(observable);
 
