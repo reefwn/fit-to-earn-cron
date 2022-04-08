@@ -5,8 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { ActivityEntity } from './activity.entity';
+import { MemberEntity } from './member.entity';
+import { CoinEntity } from './coin.entity';
 
 @Entity({ name: 'coin_histories' })
 export class CoinHistoryEntity {
@@ -45,4 +49,12 @@ export class CoinHistoryEntity {
 
   @OneToMany(() => ActivityEntity, (activity) => activity.reciever_token)
   reciever_token_activities: ActivityEntity[];
+
+  @ManyToOne(() => MemberEntity, (member) => member.coin_histories)
+  @JoinColumn({ name: 'member_id' })
+  member: MemberEntity;
+
+  @ManyToOne(() => CoinEntity, (coin) => coin.coin_histories)
+  @JoinColumn({ name: 'coin_id' })
+  coin: CoinEntity;
 }

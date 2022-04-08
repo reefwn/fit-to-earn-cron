@@ -10,8 +10,8 @@ import { NotificationData } from 'src/notification/notification.dto';
 import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
+import { LessThan, LessThanOrEqual, MoreThan } from 'typeorm';
 import { CoinService } from 'src/coin/coin.service';
-import { LessThan, MoreThan } from 'typeorm';
 import {
   ActivityStatus,
   ActivityRequireCheckinCheckout,
@@ -406,6 +406,68 @@ export class TaskService {
           },
           { status: ActivityEnrollmentStatus.CANCEL },
         );
+      }
+    }
+  }
+
+  async expireCoin() {
+    const date = new Date();
+    const timestamp = +date + 7 * 60 * 60 * 1000;
+    const dateNow = new Date(timestamp);
+
+    const baseQuery = { expired_date: LessThanOrEqual(dateNow) };
+    const expireCoinHistory = await this.coinHistoryService.find({
+      relations: { member: true, coin: true },
+      where: [
+        { ...baseQuery, expired_amount: 0 },
+        { ...baseQuery, expired_amount: null },
+      ],
+    });
+
+    for (let i = 0; i < expireCoinHistory.length; i++) {
+      const transactionNo = await this.documentNumberService.getRunNo();
+      const amount_expire =
+        expireCoinHistory[i].receive_amount - expireCoinHistory[i].usege_amount;
+      if (amount_expire > 0) {
+        const expireTransactionEntity = this.transactionService.create({
+          sender_name: `${expireCoinHistory[i].member.first_name} ${expireCoinHistory[i].member.last_name}`,
+          wallet_sender: `${expireCoinHistory[i].member.wallet_address}`,
+          wallet_receiver: process.env.WALLET_ADDRESS,
+          transaction_no: `CTF${transactionNo}`,
+          type: TransactionType.SEND,
+          status: TransactionStatus.PENDING,
+          amount: amount_expire,
+          coin_id: expireCoinHistory[i].coin_id,
+          fee: 1,
+          note: 'Coin Expired',
+        });
+        const expireTransaction = await this.transactionService.save(
+          expireTransactionEntity,
+        );
+
+        const dataTransfer: BlockChainDataDto = {
+          address: expireCoinHistory[i].member.wallet_address,
+          password: expireCoinHistory[i].member.decrypt_key,
+          receiver: process.env.ADMIN_ADDRESS,
+          coin: expireCoinHistory[i].coin.name,
+          amount: amount_expire,
+        };
+
+        const blockResponse = await this.blockChainService.transferCoin(
+          dataTransfer,
+        );
+        if (blockResponse.status === 200) {
+          await this.coinHistoryService.update(
+            { id: expireCoinHistory[i].id },
+            { expired_amount: amount_expire },
+          );
+
+          expireTransaction.status = TransactionStatus.SUCCESS;
+          expireTransaction.tx_id = blockResponse.hash;
+        } else {
+          expireTransaction.status = TransactionStatus.FAIL;
+        }
+        await this.transactionService.save(expireTransaction);
       }
     }
   }

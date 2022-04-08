@@ -9,6 +9,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
+import { CoinHistoryEntity } from './coin-history.entity';
 
 @Entity({ name: 'members' })
 export class MemberEntity {
@@ -80,4 +81,7 @@ export class MemberEntity {
 
   @OneToMany(() => ActivityEnrollmentEntity, (enrollment) => enrollment.member)
   enrollments: MemberEntity;
+
+  @OneToMany(() => CoinHistoryEntity, (coin_history) => coin_history.member)
+  coin_histories: CoinHistoryEntity[];
 }

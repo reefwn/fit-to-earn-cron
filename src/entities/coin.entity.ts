@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ActivityEntity } from './activity.entity';
+import { CoinHistoryEntity } from './coin-history.entity';
 
 @Entity({ name: 'coins' })
 export class CoinEntity {
@@ -33,4 +34,7 @@ export class CoinEntity {
 
   @OneToMany(() => ActivityEntity, (activity) => activity.reciever_token)
   reciever_token_activities: ActivityEntity[];
+
+  @OneToMany(() => CoinHistoryEntity, (coin_histories) => coin_histories.coin)
+  coin_histories: CoinHistoryEntity[];
 }
