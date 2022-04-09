@@ -10,7 +10,7 @@ import { NotificationData } from 'src/notification/notification.dto';
 import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
-import { LessThan, LessThanOrEqual, MoreThan } from 'typeorm';
+import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { CoinService } from 'src/coin/coin.service';
 import {
   ActivityStatus,
@@ -40,6 +40,46 @@ export class TaskService {
     private notificationService: NotificationService,
     private coinService: CoinService,
   ) {}
+
+  async confirmTransaction() {
+    const pendingTransactions = await this.transactionService.getTxId({
+      tx_id: Not(IsNull()),
+      status: TransactionStatus.PENDING,
+      confirmation_times: LessThan(2),
+    });
+
+    for (let i = 0; i < pendingTransactions.length; i++) {
+      let blockResponse;
+      try {
+        blockResponse = await this.blockChainService.getStatus(
+          pendingTransactions[i].tx_id,
+        );
+      } catch (error) {
+        continue;
+      }
+
+      const confirmationTimes = pendingTransactions[i].confirmation_times || 0;
+      let status: TransactionStatus;
+      if (blockResponse && blockResponse.result) {
+        status = TransactionStatus.SUCCESS;
+      } else {
+        status =
+          confirmationTimes >= 2
+            ? TransactionStatus.FAIL
+            : TransactionStatus.PENDING;
+      }
+
+      await this.transactionService.update(
+        {
+          tx_id: pendingTransactions[i].tx_id,
+        },
+        {
+          status,
+          confirmation_times: confirmationTimes + 1,
+        },
+      );
+    }
+  }
 
   async distributionCoin() {
     const date = new Date();

@@ -24,4 +24,13 @@ export class BlockChainService {
 
     return response;
   }
+
+  async getStatus(txId: string) {
+    const observable = this.httpService
+      .post(`${process.env.BLOCKCHAIN_IP}/getStatus`, { tx_id: txId })
+      .pipe(map((res) => res.data));
+    const response = await lastValueFrom(observable);
+
+    return response;
+  }
 }
