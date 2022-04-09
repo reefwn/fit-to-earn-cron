@@ -1,3 +1,5 @@
+import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
+import { CoinHistoryEntity } from './coin-history.entity';
 import { MemberGender } from 'src/member/member.enum';
 import {
   Column,
@@ -8,8 +10,6 @@ import {
   DeleteDateColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
-import { CoinHistoryEntity } from './coin-history.entity';
 
 @Entity({ name: 'members' })
 export class MemberEntity {

@@ -4,13 +4,13 @@ import { DocumentNumberService } from 'src/document-number/document-number.servi
 import { MessagingPayload } from 'firebase-admin/lib/messaging/messaging-api';
 import { NotificationService } from 'src/notification/notification.service';
 import { CoinHistoryService } from 'src/coin-history/coin-history.service';
+import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
 import { NotificationData } from 'src/notification/notification.dto';
 import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
-import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { CoinService } from 'src/coin/coin.service';
 import {
   ActivityStatus,
@@ -78,6 +78,71 @@ export class TaskService {
           confirmation_times: confirmationTimes + 1,
         },
       );
+    }
+  }
+
+  async userNeedtoCheckout() {
+    const date = new Date();
+    const timestamp = +date;
+
+    const activities = await this.activityService.find({
+      relations: { enrollments: { member: true } },
+      where: {
+        status: ActivityStatus.APPROVE,
+        deleted_at: IsNull(),
+        req_checkout: Not(ActivityRequireCheckinCheckout.NO),
+        enrollments: {
+          status: ActivityEnrollmentStatus.CHECKIN,
+          is_notification_checkout: false,
+        },
+      },
+    });
+
+    const filteredActivities = activities.filter((activity) => {
+      const timeDiff = timestamp - +activity.start_checkout;
+      const timeDiffInMinute = Math.round(timeDiff / 60000);
+      return timeDiffInMinute <= 15;
+    });
+
+    for (let i = 0; i < filteredActivities.length; i++) {
+      for (let j = 0; j < filteredActivities[i].enrollments.length; j++) {
+        const memberTokenDevices = await this.userAppTokenService.find({
+          where: { member_id: filteredActivities[i].enrollments[j].member_id },
+          order: { created_at: 'DESC' },
+          take: 5,
+        });
+
+        let notificationMessage: MessagingPayload;
+        for (let k = 0; k < memberTokenDevices.length; k++) {
+          const notificationData: NotificationData = {
+            type: NotificationType.NOTIFY_BEFORE_CHECKOUT,
+            registrationToken: memberTokenDevices[k].token,
+            activityName: filteredActivities[i].title,
+          };
+
+          await this.activityEnrollmentService.update(
+            {
+              id: filteredActivities[i].enrollments[j].id,
+            },
+            { is_notification_checkout: true },
+          );
+
+          notificationMessage = await this.notificationService.notify(
+            notificationData,
+          );
+        }
+
+        const notificationEntity = this.notificationService.create({
+          title: notificationMessage.notification.title,
+          message: notificationMessage.notification.body,
+          member_id: filteredActivities[i].enrollments[j].member_id,
+          is_sent: 1,
+          is_readed: 0,
+          link_to: NotificationBodyLocKey.MY_EVENT,
+          type: NotificationBodyLocKey.MY_EVENT,
+        });
+        await this.notificationService.save(notificationEntity);
+      }
     }
   }
 
