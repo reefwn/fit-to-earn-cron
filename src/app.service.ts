@@ -18,6 +18,7 @@ export class AppService {
   @Cron(CronExpression.EVERY_MINUTE)
   async everyMinute() {
     await this.taskService.userNeedtoCheckout();
+    await this.taskService.userNeedtoCheckin();
   }
 
   @Cron('0 */15 * * * *')

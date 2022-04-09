@@ -146,6 +146,73 @@ export class TaskService {
     }
   }
 
+  async userNeedtoCheckin() {
+    const date = new Date();
+    const timestamp = +date;
+
+    const activities = await this.activityService.find({
+      relations: { enrollments: { member: true } },
+      where: {
+        status: ActivityStatus.APPROVE,
+        deleted_at: IsNull(),
+        req_checkin: Not(ActivityRequireCheckinCheckout.NO),
+        enrollments: {
+          status: ActivityEnrollmentStatus.REGISTER,
+          is_notification_start_event: false,
+        },
+      },
+    });
+
+    const nextThreeDays = new Date(date.setDate(new Date(date).getDate() + 3))
+      .toISOString()
+      .split('T')[0];
+    const filteredActivities = activities.filter((activity) => {
+      const startCheckin = activity.start_date.toISOString().split('T')[0];
+      return startCheckin === nextThreeDays;
+    });
+
+    for (let i = 0; i < filteredActivities.length; i++) {
+      for (let j = 0; j < filteredActivities[i].enrollments.length; j++) {
+        const memberTokenDevices = await this.userAppTokenService.find({
+          where: { member_id: filteredActivities[i].enrollments[j].member_id },
+          order: { created_at: 'DESC' },
+          take: 5,
+        });
+
+        let notificationMessage: MessagingPayload;
+        for (let k = 0; k < memberTokenDevices.length; k++) {
+          const notificationData: NotificationData = {
+            type: NotificationType.NOTIFY_BEFORE_EVENT_START,
+            registrationToken: memberTokenDevices[k].token,
+            activityName: filteredActivities[i].title,
+          };
+
+          await this.activityEnrollmentService.update(
+            {
+              id: filteredActivities[i].enrollments[j].id,
+            },
+            { is_notification_start_event: true },
+          );
+
+          notificationMessage = await this.notificationService.notify(
+            notificationData,
+          );
+        }
+
+        const notificationEntity = this.notificationService.create({
+          title: notificationMessage.notification.title,
+          message: notificationMessage.notification.body,
+          member_id: filteredActivities[i].enrollments[j].member_id,
+          is_sent: 1,
+          is_readed: 0,
+          link_to: NotificationBodyLocKey.MY_EVENT,
+          type: NotificationBodyLocKey.MY_EVENT,
+        });
+        await this.notificationService.save(notificationEntity);
+      }
+    }
+  }
+
   async distributionCoin() {
     const date = new Date();
     const timestamp = +date + 14 * 60 * 60 * 1000;
