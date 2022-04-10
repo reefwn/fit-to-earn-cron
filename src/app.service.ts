@@ -29,7 +29,12 @@ export class AppService {
   }
 
   @Cron('10 17 * * *')
-  async everyTenPastMidnight() {
+  async everyTenMinutesPastMidnight() {
     await this.taskService.expireCoin();
+  }
+
+  @Cron('30 17 * * *')
+  async everyThirtyMinutesPastMidnight() {
+    await this.taskService.crontapGetHealth();
   }
 }

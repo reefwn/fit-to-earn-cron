@@ -2,6 +2,7 @@ import { ActivityEnrollmentService } from 'src/activity-enrollment/activity-enro
 import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrollment.enum';
 import { DocumentNumberService } from 'src/document-number/document-number.service';
 import { MessagingPayload } from 'firebase-admin/lib/messaging/messaging-api';
+import { MemberHealthService } from 'src/member-health/member-health.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { CoinHistoryService } from 'src/coin-history/coin-history.service';
 import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
@@ -38,6 +39,10 @@ import {
   GOOGLE_FIT_STEP_DATA_TYPE,
   GOOGLE_FIT_STEP_USER_INPUT_DATA_SOURCE,
 } from 'src/google-fit/google-fit.const';
+import {
+  MemberHealthStatus,
+  MemberHealthType,
+} from 'src/member-health/member-health.enum';
 
 @Injectable()
 export class TaskService {
@@ -53,6 +58,7 @@ export class TaskService {
     private coinService: CoinService,
     private memberService: MemberService,
     private googleFitService: GoogleFitService,
+    private memberHealthService: MemberHealthService,
   ) {}
 
   async confirmTransaction() {
@@ -658,7 +664,7 @@ export class TaskService {
     }
   }
 
-  async crontapGetHealth(dateStr: string) {
+  async crontapGetHealth(dateStr?: string) {
     const dateObj = dateStr ? new Date(dateStr) : new Date();
     const date = dateObj.getTime() + 7 * 60 * 60 * 1000;
     const newDate = new Date(date);
@@ -719,7 +725,168 @@ export class TaskService {
         continue;
       }
 
-      // TODO: request to each fit endpoints to get data
+      // heart
+      const heartResponse = await this.googleFitService.requestAggregate(
+        accessToken,
+        heartBody,
+      );
+
+      if (heartResponse) {
+        let totalPoint = 0;
+        for (let j = 0; j < heartResponse.length; j++) {
+          for (const points of heartResponse[j].dataset) {
+            for (const heart of points.point) {
+              if (
+                heart.originDataSourceId ===
+                GOOGLE_FIT_HEART_USER_INPUT_DATA_SOURCE
+              ) {
+                continue;
+              }
+
+              const heartPointInt = heart.value[0].intVal || 0;
+              totalPoint += heartPointInt;
+
+              const heartPointFp = heart.value[0].fpVal || 0;
+
+              const timeSync = new Date(
+                `${weekDates[j].slice(0, 10)} 16:59:59 +00:00`,
+              );
+
+              const condition = {
+                time_sync: timeSync,
+                type: MemberHealthType.HEART,
+                member_id: members[i].id,
+              };
+              const record = await this.memberHealthService.findOne({
+                where: condition,
+              });
+
+              if (!record) {
+                const memberHealthEntity = this.memberHealthService.create({
+                  type: MemberHealthType.HEART,
+                  point: heartPointFp,
+                  time_sync: timeSync,
+                  member_id: members[i].id,
+                  status: MemberHealthStatus.PENDING,
+                  point_remain: totalPoint,
+                });
+                await this.memberHealthService.save(memberHealthEntity);
+              }
+
+              if (record && heartPointFp > record.point) {
+                await this.memberHealthService.update(condition, {
+                  point: heartPointFp,
+                  point_remain: totalPoint,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // step
+      const stepResponse = await this.googleFitService.requestAggregate(
+        accessToken,
+        stepBody,
+      );
+
+      if (stepResponse) {
+        let totalPoint = 0;
+        for (let j = 0; j < stepResponse.length; j++) {
+          for (const points of stepResponse[j].dataset) {
+            for (const step of points.point) {
+              if (
+                step.originDataSourceId ===
+                GOOGLE_FIT_STEP_USER_INPUT_DATA_SOURCE
+              ) {
+                continue;
+              }
+
+              const stepPointInt = step.value[0].intVal || 0;
+              totalPoint += stepPointInt;
+
+              const timeSync = new Date(
+                `${weekDates[j].slice(0, 10)} 16:59:59 +00:00`,
+              );
+
+              const condition = {
+                time_sync: timeSync,
+                type: MemberHealthType.STEP,
+                member_id: members[i].id,
+              };
+              const record = await this.memberHealthService.findOne({
+                where: condition,
+              });
+
+              if (!record) {
+                const memberHealthEntity = this.memberHealthService.create({
+                  type: MemberHealthType.STEP,
+                  point: stepPointInt,
+                  time_sync: timeSync,
+                  member_id: members[i].id,
+                  status: MemberHealthStatus.PENDING,
+                  point_remain: totalPoint,
+                });
+                await this.memberHealthService.save(memberHealthEntity);
+              }
+
+              if (record && stepPointInt > record.point) {
+                await this.memberHealthService.update(condition, {
+                  point: stepPointInt,
+                  point_remain: totalPoint,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // sleep
+      const sleepResponse = await this.googleFitService.requestSession(
+        accessToken,
+        sleepQuery,
+      );
+
+      if (sleepResponse) {
+        for (let j = 0; j < sleepResponse.length; j++) {
+          const difTime =
+            sleepResponse[j].endTimeMillis - sleepResponse[j].startTimeMillis;
+          const hoursSleep = Math.floor(difTime / 60 / 60 / 1000);
+          if (hoursSleep === 0) {
+            continue;
+          }
+
+          const timeSync = new Date(
+            `${weekDates[j].slice(0, 10)} 16:59:59 +00:00`,
+          );
+
+          const condition = {
+            time_sync: timeSync,
+            type: MemberHealthType.SLEEP,
+            member_id: members[i].id,
+          };
+          const record = await this.memberHealthService.findOne({
+            where: condition,
+          });
+
+          if (!record) {
+            const memberHealthEntity = this.memberHealthService.create({
+              type: MemberHealthType.STEP,
+              point: hoursSleep,
+              time_sync: timeSync,
+              member_id: members[i].id,
+              status: MemberHealthStatus.PENDING,
+            });
+            await this.memberHealthService.save(memberHealthEntity);
+          }
+
+          if (record && hoursSleep > record.point) {
+            await this.memberHealthService.update(condition, {
+              point: hoursSleep,
+            });
+          }
+        }
+      }
     }
   }
 }
