@@ -8,10 +8,13 @@ import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
 import { NotificationData } from 'src/notification/notification.dto';
+import { GoogleFitService } from 'src/google-fit/google-fit.service';
 import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
+import { MemberService } from 'src/member/member.service';
 import { CoinService } from 'src/coin/coin.service';
+import { getWeekFromDate } from './utility';
 import {
   ActivityStatus,
   ActivityRequireCheckinCheckout,
@@ -26,6 +29,15 @@ import {
   NotificationBodyLocKey,
   NotificationType,
 } from 'src/notification/notification.enum';
+import {
+  GOOGLE_FIT_HEART_DATA_SOURCE,
+  GOOGLE_FIT_HEART_DATA_TYPE,
+  GOOGLE_FIT_HEART_USER_INPUT_DATA_SOURCE,
+  GOOGLE_FIT_SLEEP_ACTIVITY_TYPE,
+  GOOGLE_FIT_STEP_DATA_SOURCE,
+  GOOGLE_FIT_STEP_DATA_TYPE,
+  GOOGLE_FIT_STEP_USER_INPUT_DATA_SOURCE,
+} from 'src/google-fit/google-fit.const';
 
 @Injectable()
 export class TaskService {
@@ -39,6 +51,8 @@ export class TaskService {
     private userAppTokenService: UserAppTokenService,
     private notificationService: NotificationService,
     private coinService: CoinService,
+    private memberService: MemberService,
+    private googleFitService: GoogleFitService,
   ) {}
 
   async confirmTransaction() {
@@ -641,6 +655,71 @@ export class TaskService {
         }
         await this.transactionService.save(expireTransaction);
       }
+    }
+  }
+
+  async crontapGetHealth(dateStr: string) {
+    const dateObj = dateStr ? new Date(dateStr) : new Date();
+    const date = dateObj.getTime() + 7 * 60 * 60 * 1000;
+    const newDate = new Date(date);
+
+    newDate.setDate(new Date(date).getDate() - 1);
+    const dd = String(newDate.getDate()).padStart(2, '0');
+    const mm = String(newDate.getMonth() + 1).padStart(2, '0'); //January is 0!
+    const yyyy = newDate.getFullYear();
+
+    const today = yyyy + '-' + mm + '-' + dd;
+
+    const weekDates = getWeekFromDate(today);
+    const startDate = +weekDates[0];
+    const endDate = +weekDates[6];
+
+    const heartBody = this.googleFitService.getBody(
+      GOOGLE_FIT_HEART_DATA_TYPE,
+      GOOGLE_FIT_HEART_DATA_SOURCE,
+      startDate,
+      endDate,
+    );
+
+    const heartUserInputBody = this.googleFitService.getBody(
+      GOOGLE_FIT_HEART_DATA_TYPE,
+      GOOGLE_FIT_HEART_USER_INPUT_DATA_SOURCE,
+      startDate,
+      endDate,
+    );
+
+    const stepBody = this.googleFitService.getBody(
+      GOOGLE_FIT_STEP_DATA_TYPE,
+      GOOGLE_FIT_STEP_DATA_SOURCE,
+      startDate,
+      endDate,
+    );
+
+    const stepUserInputBody = this.googleFitService.getBody(
+      GOOGLE_FIT_STEP_DATA_TYPE,
+      GOOGLE_FIT_STEP_USER_INPUT_DATA_SOURCE,
+      startDate,
+      endDate,
+    );
+
+    const sleepQuery = this.googleFitService.getQuery(
+      GOOGLE_FIT_SLEEP_ACTIVITY_TYPE,
+      startDate,
+      endDate,
+    );
+
+    const members = await this.memberService.find({
+      where: { google_oauth_token: Not(IsNull()), deleted_at: IsNull() },
+    });
+    for (let i = 0; i < members.length; i++) {
+      const accessToken = await this.googleFitService.refreshGoogleToken(
+        members[i].google_oauth_token,
+      );
+      if (!accessToken) {
+        continue;
+      }
+
+      // TODO: request to each fit endpoints to get data
     }
   }
 }
