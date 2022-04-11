@@ -5,10 +5,13 @@ import {
 import {
   Column,
   Entity,
+  ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { MemberEntity } from './member.entity';
 
 @Entity({ name: 'member_healths' })
 export class MemberHealthEntity {
@@ -47,4 +50,8 @@ export class MemberHealthEntity {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @ManyToOne(() => MemberEntity, (member) => member.healths)
+  @JoinColumn({ name: 'member_id' })
+  member: MemberEntity;
 }

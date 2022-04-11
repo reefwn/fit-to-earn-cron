@@ -1,8 +1,13 @@
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { MemberHealthEntity } from 'src/entities/member-health.entity';
-import { FindOneOptions, FindOptionsWhere, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
+import {
+  FindOptionsWhere,
+  FindManyOptions,
+  FindOneOptions,
+  Repository,
+} from 'typeorm';
 
 @Injectable()
 export class MemberHealthService {
@@ -10,6 +15,10 @@ export class MemberHealthService {
     @InjectRepository(MemberHealthEntity)
     private readonly memberHealthRepo: Repository<MemberHealthEntity>,
   ) {}
+
+  find(options: FindManyOptions<MemberHealthEntity>) {
+    return this.memberHealthRepo.find(options);
+  }
 
   findOne(options: FindOneOptions<MemberHealthEntity>) {
     return this.memberHealthRepo.findOne(options);

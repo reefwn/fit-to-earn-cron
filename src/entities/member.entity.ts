@@ -1,4 +1,5 @@
 import { ActivityEnrollmentEntity } from './activity-enrollment.entity';
+import { MemberHealthEntity } from './member-health.entity';
 import { CoinHistoryEntity } from './coin-history.entity';
 import { MemberGender } from 'src/member/member.enum';
 import {
@@ -84,4 +85,7 @@ export class MemberEntity {
 
   @OneToMany(() => CoinHistoryEntity, (coin_history) => coin_history.member)
   coin_histories: CoinHistoryEntity[];
+
+  @OneToMany(() => MemberHealthEntity, (health) => health.member)
+  healths: MemberHealthEntity[];
 }

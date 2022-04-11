@@ -5,7 +5,15 @@ import { MessagingPayload } from 'firebase-admin/lib/messaging/messaging-api';
 import { MemberHealthService } from 'src/member-health/member-health.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { CoinHistoryService } from 'src/coin-history/coin-history.service';
-import { IsNull, LessThan, LessThanOrEqual, MoreThan, Not } from 'typeorm';
+import {
+  Between,
+  FindManyOptions,
+  IsNull,
+  LessThan,
+  LessThanOrEqual,
+  MoreThan,
+  Not,
+} from 'typeorm';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
 import { NotificationData } from 'src/notification/notification.dto';
@@ -43,6 +51,9 @@ import {
   MemberHealthStatus,
   MemberHealthType,
 } from 'src/member-health/member-health.enum';
+import { HealthConfigService } from 'src/health-config/health-config.service';
+import { HealthConfigType } from 'src/health-config/health-config.enum';
+import { MemberHealthEntity } from 'src/entities/member-health.entity';
 
 @Injectable()
 export class TaskService {
@@ -59,6 +70,7 @@ export class TaskService {
     private memberService: MemberService,
     private googleFitService: GoogleFitService,
     private memberHealthService: MemberHealthService,
+    private healthConfigService: HealthConfigService,
   ) {}
 
   async confirmTransaction() {
@@ -885,6 +897,114 @@ export class TaskService {
               point: hoursSleep,
             });
           }
+        }
+      }
+    }
+  }
+
+  async distributeFitivityAccumulation(dateStr?: string, memberId?: number) {
+    const dateObj = dateStr ? new Date(dateStr) : new Date();
+    const date = dateObj.getTime() + 7 * 60 * 60 * 1000;
+    const newDate = new Date(date);
+
+    newDate.setDate(new Date(date).getDate() - 1);
+    const dd = String(newDate.getDate()).padStart(2, '0');
+    const mm = String(newDate.getMonth() + 1).padStart(2, '0'); //January is 0!
+    const yyyy = newDate.getFullYear();
+
+    const today = yyyy + '-' + mm + '-' + dd;
+
+    const weekDates = getWeekFromDate(today);
+    const startDate = weekDates[0];
+    const endDate = `${weekDates[6].slice(0, 10)} 23:59:59`;
+
+    const healthConfigs = await this.healthConfigService.find({});
+    const healthConfigStep = healthConfigs.find(
+      (x) => x.type === HealthConfigType.STEP,
+    );
+    const healthConfigHeart = healthConfigs.find(
+      (x) => x.type === HealthConfigType.HEART,
+    );
+    const healthConfigSleep = healthConfigs.find(
+      (x) => x.type === HealthConfigType.SLEEP,
+    );
+
+    const condition: FindManyOptions<MemberHealthEntity> = {
+      relations: { member: true },
+      where: {
+        time_sync: Between(startDate, endDate),
+      },
+      order: { time_sync: 'ASC' },
+    };
+    if (memberId) {
+      condition.where = { ...condition, member_id: memberId };
+    }
+
+    const fitivityData = await this.memberHealthService.find(condition);
+
+    const submitToBlockData = [];
+    for (const fitivity of fitivityData) {
+      const currDate = `${fitivity.time_sync.getDate()}`.padStart(2, '0');
+      const currMonth = `${fitivity.time_sync.getMonth() + 1}`.padStart(2, '0');
+      const currYear = `${fitivity.time_sync.getFullYear()}`;
+      const currentDate = `${currYear}-${currMonth}-${currDate}`;
+
+      if (currentDate === today) {
+        const relatedHistory = fitivityData.filter(
+          (fit) =>
+            fit.member_id === fitivity.member_id && fit.type === fitivity.type,
+        );
+
+        // sum point for accum
+        const totalPoints = relatedHistory.reduce((a, b) => {
+          return a + (+b.point || 0);
+        }, 0);
+
+        // sum coin distribute
+        const totalAmountReceived = relatedHistory.reduce((a, b) => {
+          return a + (+b.amount_receive || 0);
+        }, 0);
+
+        let amountPerCoin = 1;
+        let coinAmountPerWeek = 1;
+        if (fitivity.type === MemberHealthType.HEART) {
+          amountPerCoin = healthConfigHeart.amount_per_coin;
+          coinAmountPerWeek = healthConfigHeart.coin_amount_per_week;
+        }
+        if (fitivity.type === MemberHealthType.STEP) {
+          amountPerCoin = healthConfigStep.amount_per_coin;
+          coinAmountPerWeek = healthConfigStep.coin_amount_per_week;
+        }
+        if (fitivity.type === MemberHealthType.SLEEP) {
+          amountPerCoin = healthConfigSleep.amount_per_coin;
+          coinAmountPerWeek = healthConfigSleep.coin_amount_per_week;
+        }
+
+        const toDistribute = totalPoints / amountPerCoin;
+        const canDistribute = coinAmountPerWeek - totalAmountReceived;
+        let finalCoinDistribute =
+          toDistribute - totalAmountReceived >= canDistribute
+            ? canDistribute
+            : toDistribute - totalAmountReceived;
+
+        if (finalCoinDistribute < 0) {
+          finalCoinDistribute = 0;
+        }
+
+        const data = {
+          member_wallet: fitivity.member.wallet_address,
+          coin_distribute: finalCoinDistribute,
+          receiver_name: `${fitivity.member.first_name} ${fitivity.member.last_name}`,
+          member_id: fitivity.member.id,
+          coin_use: finalCoinDistribute,
+          updata_id: fitivity.id,
+        };
+
+        if (+data.coin_distribute > 0) {
+          submitToBlockData.push(data);
+        } else {
+          // TODO: add distributeTransfer function
+          // await distributeTranfer(data);
         }
       }
     }
