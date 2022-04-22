@@ -738,6 +738,32 @@ export class TaskService {
       }
 
       // heart
+      const heartUserInputs = new Array(7).fill(0);
+      let isHeartUserInputAuthorized = true;
+
+      try {
+        const heartUserInputResponse =
+          await this.googleFitService.requestAggregate(
+            accessToken,
+            heartUserInputBody,
+          );
+
+        const heartArray = heartUserInputResponse.data?.bucket;
+        if (heartArray) {
+          for (const datasets of heartArray) {
+            let idx = 0;
+            for (const points of datasets.dataset) {
+              for (const hearts of points.point) {
+                heartUserInputs[idx] = hearts.value[0].intVal || 0;
+              }
+            }
+            idx++;
+          }
+        }
+      } catch (e) {
+        isHeartUserInputAuthorized = false;
+      }
+
       const heartResponse = await this.googleFitService.requestAggregate(
         accessToken,
         heartBody,
@@ -745,6 +771,7 @@ export class TaskService {
 
       if (heartResponse) {
         let totalPoint = 0;
+        let idx = 0;
         for (let j = 0; j < heartResponse.length; j++) {
           for (const points of heartResponse[j].dataset) {
             for (const heart of points.point) {
@@ -756,9 +783,11 @@ export class TaskService {
               }
 
               const heartPointInt = heart.value[0].intVal || 0;
-              totalPoint += heartPointInt;
+              const userHeartPoint = isHeartUserInputAuthorized
+                ? heartPointInt - heartUserInputs[idx]
+                : heartPointInt;
 
-              const heartPointFp = heart.value[0].fpVal || 0;
+              totalPoint += userHeartPoint;
 
               const timeSync = new Date(
                 `${weekDates[j].slice(0, 10)} 16:59:59 +00:00`,
@@ -776,28 +805,55 @@ export class TaskService {
               if (!record) {
                 const memberHealthEntity = this.memberHealthService.create({
                   type: MemberHealthType.HEART,
-                  point: heartPointFp,
+                  point: userHeartPoint,
                   time_sync: timeSync,
                   member_id: members[i].id,
-                  point_first_sync: heartPointFp,
+                  point_first_sync: userHeartPoint,
                   status: MemberHealthStatus.PENDING,
                   point_remain: totalPoint,
                 });
                 await this.memberHealthService.save(memberHealthEntity);
               }
 
-              if (record && heartPointFp > record.point) {
+              if (record && userHeartPoint > record.point) {
                 await this.memberHealthService.update(condition, {
-                  point: heartPointFp,
+                  point: userHeartPoint,
                   point_remain: totalPoint,
                 });
               }
+              idx++;
             }
           }
         }
       }
 
       // step
+      const stepUserInputs = new Array(7).fill(0);
+      let isStepUserInputAuthorized = true;
+
+      try {
+        const stepUserInputResponse =
+          await this.googleFitService.requestAggregate(
+            accessToken,
+            stepUserInputBody,
+          );
+
+        const stepArray = stepUserInputResponse.data?.bucket;
+        if (stepArray) {
+          for (const datasets of stepArray) {
+            let idx = 0;
+            for (const points of datasets.dataset) {
+              for (const steps of points.point) {
+                heartUserInputs[idx] = steps.value[0].intVal || 0;
+              }
+            }
+            idx++;
+          }
+        }
+      } catch (e) {
+        isStepUserInputAuthorized = false;
+      }
+
       const stepResponse = await this.googleFitService.requestAggregate(
         accessToken,
         stepBody,
@@ -805,6 +861,7 @@ export class TaskService {
 
       if (stepResponse) {
         let totalPoint = 0;
+        let idx = 0;
         for (let j = 0; j < stepResponse.length; j++) {
           for (const points of stepResponse[j].dataset) {
             for (const step of points.point) {
@@ -816,7 +873,11 @@ export class TaskService {
               }
 
               const stepPointInt = step.value[0].intVal || 0;
-              totalPoint += stepPointInt;
+              const userStepPoint = isStepUserInputAuthorized
+                ? stepPointInt - stepUserInputs[idx]
+                : stepPointInt;
+
+              totalPoint += userStepPoint;
 
               const timeSync = new Date(
                 `${weekDates[j].slice(0, 10)} 16:59:59 +00:00`,
@@ -834,22 +895,23 @@ export class TaskService {
               if (!record) {
                 const memberHealthEntity = this.memberHealthService.create({
                   type: MemberHealthType.STEP,
-                  point: stepPointInt,
+                  point: userStepPoint,
                   time_sync: timeSync,
                   member_id: members[i].id,
-                  point_first_sync: stepPointInt,
+                  point_first_sync: userStepPoint,
                   status: MemberHealthStatus.PENDING,
                   point_remain: totalPoint,
                 });
                 await this.memberHealthService.save(memberHealthEntity);
               }
 
-              if (record && stepPointInt > record.point) {
+              if (record && userStepPoint > record.point) {
                 await this.memberHealthService.update(condition, {
-                  point: stepPointInt,
+                  point: userStepPoint,
                   point_remain: totalPoint,
                 });
               }
+              idx++;
             }
           }
         }
