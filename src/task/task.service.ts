@@ -779,6 +779,7 @@ export class TaskService {
                   point: heartPointFp,
                   time_sync: timeSync,
                   member_id: members[i].id,
+                  point_first_sync: heartPointFp,
                   status: MemberHealthStatus.PENDING,
                   point_remain: totalPoint,
                 });
@@ -836,6 +837,7 @@ export class TaskService {
                   point: stepPointInt,
                   time_sync: timeSync,
                   member_id: members[i].id,
+                  point_first_sync: stepPointInt,
                   status: MemberHealthStatus.PENDING,
                   point_remain: totalPoint,
                 });
@@ -887,6 +889,7 @@ export class TaskService {
               point: hoursSleep,
               time_sync: timeSync,
               member_id: members[i].id,
+              point_first_sync: hoursSleep,
               status: MemberHealthStatus.PENDING,
             });
             await this.memberHealthService.save(memberHealthEntity);

@@ -45,6 +45,9 @@ export class MemberHealthEntity {
   @Column()
   member_id: number;
 
+  @Column()
+  point_first_sync: number;
+
   @CreateDateColumn()
   created_at: Date;
 
