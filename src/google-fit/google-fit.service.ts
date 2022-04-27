@@ -8,6 +8,7 @@ import {
   GOOGLE_FIT_AGGREGATE_URL,
   GOOGLE_FIT_DURATION_ONE_WEEK,
 } from './google-fit.const';
+import { GoogleFitResponsePointValue } from './google-fit.interface';
 
 @Injectable()
 export class GoogleFitService {
@@ -88,5 +89,9 @@ export class GoogleFitService {
     const response = await lastValueFrom(observable);
 
     return response;
+  }
+
+  findIntVal(value: GoogleFitResponsePointValue[]) {
+    return value.find((v) => !!v.intVal);
   }
 }

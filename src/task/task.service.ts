@@ -750,11 +750,12 @@ export class TaskService {
 
         const heartArray = heartUserInputResponse.data?.bucket;
         if (heartArray) {
+          let idx = 0;
           for (const datasets of heartArray) {
-            let idx = 0;
             for (const points of datasets.dataset) {
               for (const hearts of points.point) {
-                heartUserInputs[idx] = hearts.value[0].intVal || 0;
+                const heart = this.googleFitService.findIntVal(hearts.value);
+                heartUserInputs[idx] = heart.intVal || 0;
               }
             }
             idx++;
@@ -774,15 +775,9 @@ export class TaskService {
         let idx = 0;
         for (let j = 0; j < heartResponse.length; j++) {
           for (const points of heartResponse[j].dataset) {
-            for (const heart of points.point) {
-              if (
-                heart.originDataSourceId ===
-                GOOGLE_FIT_HEART_USER_INPUT_DATA_SOURCE
-              ) {
-                continue;
-              }
-
-              const heartPointInt = heart.value[0].intVal || 0;
+            for (const hearts of points.point) {
+              const heart = this.googleFitService.findIntVal(hearts.value);
+              const heartPointInt = heart.intVal || 0;
               const userHeartPoint = isHeartUserInputAuthorized
                 ? heartPointInt - heartUserInputs[idx]
                 : heartPointInt;
@@ -840,11 +835,12 @@ export class TaskService {
 
         const stepArray = stepUserInputResponse.data?.bucket;
         if (stepArray) {
+          let idx = 0;
           for (const datasets of stepArray) {
-            let idx = 0;
             for (const points of datasets.dataset) {
               for (const steps of points.point) {
-                heartUserInputs[idx] = steps.value[0].intVal || 0;
+                const step = this.googleFitService.findIntVal(steps.value);
+                heartUserInputs[idx] = step.intVal || 0;
               }
             }
             idx++;
@@ -864,15 +860,10 @@ export class TaskService {
         let idx = 0;
         for (let j = 0; j < stepResponse.length; j++) {
           for (const points of stepResponse[j].dataset) {
-            for (const step of points.point) {
-              if (
-                step.originDataSourceId ===
-                GOOGLE_FIT_STEP_USER_INPUT_DATA_SOURCE
-              ) {
-                continue;
-              }
+            for (const steps of points.point) {
+              const step = this.googleFitService.findIntVal(steps.value);
 
-              const stepPointInt = step.value[0].intVal || 0;
+              const stepPointInt = step.intVal || 0;
               const userStepPoint = isStepUserInputAuthorized
                 ? stepPointInt - stepUserInputs[idx]
                 : stepPointInt;
