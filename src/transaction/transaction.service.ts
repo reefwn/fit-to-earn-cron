@@ -1,6 +1,7 @@
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { FindManyOptions, FindOptionsWhere, Repository } from 'typeorm';
 import { TransactionEntity } from 'src/entities/transaction.entity';
+import { TransactionStatus } from './transaction.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
 
@@ -41,5 +42,18 @@ export class TransactionService {
       .where(options)
       .groupBy(txId)
       .getMany();
+  }
+
+  updateStatusByPairTx(
+    pairTx: string,
+    status: TransactionStatus,
+    extraOptions?: QueryDeepPartialEntity<TransactionEntity>,
+  ) {
+    const baseOptions = { status, updated_at: new Date() };
+    const options = extraOptions
+      ? Object.assign(baseOptions, extraOptions)
+      : baseOptions;
+
+    return this.transactionRepo.update({ pair_transaction: pairTx }, options);
   }
 }

@@ -147,7 +147,7 @@ export class NotificationService implements OnModuleInit {
     return this.notificationRepo.create(entity);
   }
 
-  async save(entity: NotificationEntity) {
+  save(entity: NotificationEntity) {
     return this.notificationRepo.save(entity);
   }
 }

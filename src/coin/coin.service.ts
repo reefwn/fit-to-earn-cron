@@ -13,4 +13,8 @@ export class CoinService {
   async findOne(options: FindOneOptions<CoinEntity>) {
     return this.coinRepo.findOne(options);
   }
+
+  async findByName(name: string) {
+    return this.coinRepo.findOne({ where: { name } });
+  }
 }

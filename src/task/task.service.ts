@@ -3,22 +3,18 @@ import { ActivityEnrollmentStatus } from 'src/activity-enrollment/activity-enrol
 import { DocumentNumberService } from 'src/document-number/document-number.service';
 import { MessagingPayload } from 'firebase-admin/lib/messaging/messaging-api';
 import { MemberHealthService } from 'src/member-health/member-health.service';
+import { HealthConfigService } from 'src/health-config/health-config.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { TransactionUtilService } from 'src/utils/transaction-util.service';
 import { CoinHistoryService } from 'src/coin-history/coin-history.service';
-import {
-  Between,
-  FindManyOptions,
-  IsNull,
-  LessThan,
-  LessThanOrEqual,
-  MoreThan,
-  Not,
-} from 'typeorm';
+import { DistributeUtilService } from 'src/utils/distribute-util.service';
 import { TransactionService } from 'src/transaction/transaction.service';
+import { HealthConfigType } from 'src/health-config/health-config.enum';
+import { MemberHealthEntity } from 'src/entities/member-health.entity';
 import { BlockChainService } from 'src/blockchain/blockchain.service';
+import { distributeTransferDto } from 'src/utils/distribute-util.dto';
 import { NotificationData } from 'src/notification/notification.dto';
 import { GoogleFitService } from 'src/google-fit/google-fit.service';
-import { TransactionEntity } from 'src/entities/transaction.entity';
 import { BlockChainDataDto } from 'src/blockchain/blockchain.dto';
 import { ActivityService } from 'src/activity/activity.service';
 import { MemberService } from 'src/member/member.service';
@@ -51,9 +47,15 @@ import {
   MemberHealthStatus,
   MemberHealthType,
 } from 'src/member-health/member-health.enum';
-import { HealthConfigService } from 'src/health-config/health-config.service';
-import { HealthConfigType } from 'src/health-config/health-config.enum';
-import { MemberHealthEntity } from 'src/entities/member-health.entity';
+import {
+  Between,
+  FindManyOptions,
+  IsNull,
+  LessThan,
+  LessThanOrEqual,
+  MoreThan,
+  Not,
+} from 'typeorm';
 
 @Injectable()
 export class TaskService {
@@ -71,6 +73,9 @@ export class TaskService {
     private googleFitService: GoogleFitService,
     private memberHealthService: MemberHealthService,
     private healthConfigService: HealthConfigService,
+    // utilitiy services
+    private transactionUtilService: TransactionUtilService,
+    private distributeUtilService: DistributeUtilService,
   ) {}
 
   async confirmTransaction() {
@@ -304,40 +309,19 @@ export class TaskService {
                 : 1;
           }
 
-          const transactionBaseEntity: Partial<TransactionEntity> = {
-            sender_name: null,
-            receiver_name: `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`,
-            wallet_sender: process.env.WALLET_ADDRESS,
-            wallet_receiver: `${activities[i].enrollments[j].member.wallet_address}`,
-            status: TransactionStatus.PENDING,
-            amount: userCsrtime,
-            amount_receive: userCsrtime,
-            coin_id: activities[i].reciever_token.id,
-            coin_receive_id: activities[i].reciever_token.id,
-            fee: 1,
-            note: `คุณได้รับเหรียญ ${activities[i].reciever_token.full_name} จำนวน ${userCsrtime} เหรียญ จากกิจกรรม ${activities[i].title}`,
-          };
+          const transactionBaseEntity =
+            this.transactionUtilService.getBaseEntity();
+          transactionBaseEntity.receiver_name = `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`;
+          transactionBaseEntity.amount = userCsrtime;
+          transactionBaseEntity.amount_receive = userCsrtime;
+          transactionBaseEntity.coin_id = activities[i].reciever_token.id;
+          transactionBaseEntity.coin_receive_id =
+            activities[i].reciever_token.id;
+          transactionBaseEntity.note = `คุณได้รับเหรียญ ${activities[i].reciever_token.full_name} จำนวน ${userCsrtime} เหรียญ จากกิจกรรม ${activities[i].title}`;
 
-          let transactionNo = await this.documentNumberService.getRunNo();
-          const distributeSendTransactionEntity =
-            this.transactionService.create(transactionBaseEntity);
-          distributeSendTransactionEntity.type = TransactionType.SEND;
-          distributeSendTransactionEntity.transaction_no = `CTF${transactionNo}`;
-          distributeSendTransactionEntity.pair_transaction = `${transactionNo}`;
-          const distributeSendTransaction = await this.transactionService.save(
-            distributeSendTransactionEntity,
-          );
-
-          transactionNo = await this.documentNumberService.getRunNo();
-          const distributeReceiveTransactionEntity =
-            this.transactionService.create(transactionBaseEntity);
-          distributeReceiveTransactionEntity.type = TransactionType.RECEIVE;
-          distributeReceiveTransactionEntity.transaction_no = `CTF${transactionNo}`;
-          distributeReceiveTransactionEntity.pair_transaction =
-            distributeSendTransaction.pair_transaction;
-          const distributeReceiveTransaction =
-            await this.transactionService.save(
-              distributeReceiveTransactionEntity,
+          const [distributeSendTransaction, distributeReceiveTransaction] =
+            await this.transactionUtilService.createAndSavePairTransactions(
+              transactionBaseEntity,
             );
 
           const dataTransfer: BlockChainDataDto = {
@@ -998,7 +982,7 @@ export class TaskService {
 
     const fitivityData = await this.memberHealthService.find(condition);
 
-    const submitToBlockData = [];
+    const submitToBlockData: distributeTransferDto[] = [];
     for (const fitivity of fitivityData) {
       const currDate = `${fitivity.time_sync.getDate()}`.padStart(2, '0');
       const currMonth = `${fitivity.time_sync.getMonth() + 1}`.padStart(2, '0');
@@ -1047,22 +1031,40 @@ export class TaskService {
           finalCoinDistribute = 0;
         }
 
-        const data = {
-          member_wallet: fitivity.member.wallet_address,
-          coin_distribute: finalCoinDistribute,
-          receiver_name: `${fitivity.member.first_name} ${fitivity.member.last_name}`,
-          member_id: fitivity.member.id,
-          coin_use: finalCoinDistribute,
-          updata_id: fitivity.id,
+        const data: distributeTransferDto = {
+          memberWalletAddress: fitivity.member.wallet_address,
+          distributeAmount: finalCoinDistribute,
+          receiverName: `${fitivity.member.first_name} ${fitivity.member.last_name}`,
+          memberId: fitivity.member.id,
+          updateId: fitivity.id,
         };
 
-        if (+data.coin_distribute > 0) {
+        if (+data.distributeAmount > 0) {
           submitToBlockData.push(data);
         } else {
-          // TODO: add distributeTransfer function
-          // await distributeTranfer(data);
+          await this.memberHealthService.update(
+            { id: fitivity.id },
+            {
+              amount_receive: finalCoinDistribute,
+              point_use: finalCoinDistribute,
+              status: MemberHealthStatus.DISTRIBUTED,
+            },
+          );
         }
       }
     }
+
+    submitToBlockData.map(
+      (data, ix) =>
+        new Promise((resolve) =>
+          setTimeout(async () => {
+            console.log('distribute for id: ', data.updateId);
+            await this.distributeUtilService.distributeTransferFitivityAccumulation(
+              data,
+            );
+            resolve(true);
+          }, ix * 10000),
+        ),
+    );
   }
 }

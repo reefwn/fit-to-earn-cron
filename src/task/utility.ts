@@ -1,3 +1,5 @@
+export const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 export const getWeekFromDate = (date: string) => {
   const curr = +new Date(date) - 14 * 60 * 60 * 1000;
   const now = new Date(curr);
