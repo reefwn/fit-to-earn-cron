@@ -173,7 +173,7 @@ export class ActivityEntity {
   )
   enrollments: ActivityEnrollmentEntity[];
 
-  @ManyToOne(() => CoinEntity, (coin) => coin.reciever_token_activities)
+  @ManyToOne(() => CoinEntity, (coin) => coin.receiver_token_activities)
   @JoinColumn({ name: 'receiver_token_type', referencedColumnName: 'name' })
-  reciever_token: CoinEntity;
+  receiver_token: CoinEntity;
 }

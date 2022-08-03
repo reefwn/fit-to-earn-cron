@@ -262,7 +262,7 @@ export class TaskService {
     ];
 
     const activities = await this.activityService.find({
-      relations: { reciever_token: true, enrollments: { member: true } },
+      relations: { receiver_token: true, enrollments: { member: true } },
       where: [
         {
           ...activityBaseQuery,
@@ -279,8 +279,10 @@ export class TaskService {
       ],
     });
 
+    const submitToBlockData: distributeTransferDto[] = [];
     for (let i = 0; i < activities.length; i++) {
       for (let j = 0; j < activities[i].enrollments.length; j++) {
+        const enrollActivity = activities[i].enrollments[j];
         const memberCsrTime =
           activities[i].enrollments[j].cumulative_csrtime || 0;
 
@@ -309,15 +311,25 @@ export class TaskService {
                 : 1;
           }
 
+          submitToBlockData.push({
+            memberId: enrollActivity.member.id,
+            memberWalletAddress: enrollActivity.member.wallet_address,
+            receiverName: `${enrollActivity.member.first_name} ${enrollActivity.member.last_name}`,
+            coin: activities[i].receiver_token,
+            distributeAmount: userCsrtime,
+            activityTitle: activities[i].title,
+            updateId: enrollActivity.id,
+          });
+
           const transactionBaseEntity =
             this.transactionUtilService.getBaseEntity();
           transactionBaseEntity.receiver_name = `${activities[i].enrollments[j].member.first_name} ${activities[i].enrollments[j].member.last_name}`;
           transactionBaseEntity.amount = userCsrtime;
           transactionBaseEntity.amount_receive = userCsrtime;
-          transactionBaseEntity.coin_id = activities[i].reciever_token.id;
+          transactionBaseEntity.coin_id = activities[i].receiver_token.id;
           transactionBaseEntity.coin_receive_id =
-            activities[i].reciever_token.id;
-          transactionBaseEntity.note = `คุณได้รับเหรียญ ${activities[i].reciever_token.full_name} จำนวน ${userCsrtime} เหรียญ จากกิจกรรม ${activities[i].title}`;
+            activities[i].receiver_token.id;
+          transactionBaseEntity.note = `คุณได้รับเหรียญ ${activities[i].receiver_token.full_name} จำนวน ${userCsrtime} เหรียญ จากกิจกรรม ${activities[i].title}`;
 
           const [distributeSendTransaction, distributeReceiveTransaction] =
             await this.transactionUtilService.createAndSavePairTransactions(
@@ -350,16 +362,16 @@ export class TaskService {
             await this.transactionService.save(distributeReceiveTransaction);
 
             let expireCoinHistory = null;
-            if (activities[i].reciever_token.age !== 0) {
+            if (activities[i].receiver_token.age !== 0) {
               expireCoinHistory =
                 timestamp +
-                activities[i].reciever_token.age * 24 * 60 * 60 * 1000;
+                activities[i].receiver_token.age * 24 * 60 * 60 * 1000;
             }
 
             const coinHistoryEntity = this.coinHistoryService.create({
               wallet_address:
                 activities[i].enrollments[j].member.wallet_address,
-              coin_id: activities[i].reciever_token.id,
+              coin_id: activities[i].receiver_token.id,
               receive_date: new Date(timestamp),
               expired_date: expireCoinHistory,
               member_id: activities[i].enrollments[j].member.id,
@@ -388,7 +400,7 @@ export class TaskService {
               const notificationData: NotificationData = {
                 type: NotificationType.RECEIVE_COIN,
                 registrationToken: memberTokenDevices[k].token,
-                coinName: activities[i].reciever_token.full_name,
+                coinName: activities[i].receiver_token.full_name,
                 coinAmount: userCsrtime,
                 userSend: activities[i].title,
               };
@@ -406,7 +418,7 @@ export class TaskService {
               is_readed: 0,
               link_to: NotificationBodyLocKey.TRANSACTION_HISTORY,
               type: NotificationBodyLocKey.TRANSACTION_HISTORY,
-              image_ref_id: activities[i].reciever_token.id,
+              image_ref_id: activities[i].receiver_token.id,
             });
             await this.notificationService.save(notificationEntity);
           }
@@ -437,7 +449,7 @@ export class TaskService {
     ];
 
     const activities = await this.activityService.find({
-      relations: { reciever_token: true, enrollments: { member: true } },
+      relations: { receiver_token: true, enrollments: { member: true } },
       where: [
         {
           ...activityBaseQuery,

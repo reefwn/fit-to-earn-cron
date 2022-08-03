@@ -47,8 +47,8 @@ export class CoinHistoryEntity {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => ActivityEntity, (activity) => activity.reciever_token)
-  reciever_token_activities: ActivityEntity[];
+  @OneToMany(() => ActivityEntity, (activity) => activity.receiver_token)
+  receiver_token_activities: ActivityEntity[];
 
   @ManyToOne(() => MemberEntity, (member) => member.coin_histories)
   @JoinColumn({ name: 'member_id' })
